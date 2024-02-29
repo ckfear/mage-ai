@@ -194,6 +194,7 @@ class BlockResource(GenericResource):
                     block_type = replicated_block.type
                     # You can replicate a replica but it’ll only replicate the original block.
                     replicated_block = replicated_block.get_original_block() or replicated_block
+                    block_attributes['configuration'] = replicated_block.configuration
                     block_attributes['language'] = replicated_block.language
                     block_attributes['replicated_block'] = replicated_block.uuid
                 else:
@@ -232,7 +233,7 @@ class BlockResource(GenericResource):
 
         if pipeline:
             cache = await BlockCache.initialize_cache()
-            cache.add_pipeline(block, pipeline)
+            cache.add_pipeline(block.to_dict(), pipeline)
 
         cache_block_action_object = await BlockActionObjectCache.initialize_cache()
         cache_block_action_object.update_block(block)
@@ -283,7 +284,12 @@ class BlockResource(GenericResource):
         if file_path:
             file_path = file_path[0]
         if file_path:
-            block = Block.get_block_from_file_path(urllib.parse.unquote(file_path))
+            try:
+                block = Block.get_block_from_file_path(urllib.parse.unquote(file_path))
+            except Exception as err:
+                print(f'[ERROR] BlockResource.member: {err}')
+                block = None
+
             if block:
                 return self(block, user, **kwargs)
             else:
@@ -353,7 +359,7 @@ class BlockResource(GenericResource):
 
         for block in blocks_to_delete:
             if pipeline:
-                cache.remove_pipeline(block, pipeline.uuid, pipeline.repo_path)
+                cache.remove_pipeline(block.to_dict(), pipeline.uuid, pipeline.repo_path)
             cache_block_action_object.update_block(block, remove=True)
             block.delete(force=force)
 

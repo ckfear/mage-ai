@@ -1101,7 +1101,7 @@ function CommandCenter({
 
   registerOnKeyDown(COMPONENT_UUID, (event, keyMapping, keyHistory) => {
     function startSequenceValid(): boolean {
-      const ks = getSetSettings(refSettings?.current || {})?.interface?.keyboard_shortcuts?.main;
+      const ks = getSetSettings(refSettings?.current || {})?.interface?.keyboard_shortcuts?.main?.filter(k => k?.length >= 1);
 
       if (ks?.length >= 1) {
         return ks?.every(k => keyMapping?.[k]);
@@ -1312,7 +1312,9 @@ function CommandCenter({
   useEffect(() => {
     if (reload !== null) {
       renderItems(getCachedItems(), { shouldFilter: true });
-      fetchItems();
+      fetchItems({
+        delay: 5000,
+      });
       refReload.current = (refReload?.current || 0) + 1;
     }
   }, [reload]);

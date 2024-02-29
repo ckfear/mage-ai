@@ -28,7 +28,6 @@ import Tooltip from '@oracle/components/Tooltip';
 import Widget from '@components/PipelineRun/Widget';
 import api from '@api';
 import dark from '@oracle/styles/themes/dark';
-import usePrevious from '@utils/usePrevious';
 import {
   AggregationFunctionEnum,
   ChartStyleEnum,
@@ -50,7 +49,7 @@ import { BlockTypeEnum } from '@interfaces/BlockType';
 import { DataSourceEnum } from '@interfaces/BlockLayoutItemType';
 import { ErrorProvider } from '@context/Error';
 import { HEADER_HEIGHT } from '@components/shared/Header/index.style';
-import { MonitorStatsEnum, RunCountStatsType } from '@interfaces/MonitorStatsType';
+import { MonitorStatsEnum } from '@interfaces/MonitorStatsType';
 import { NAV_TAB_PIPELINES } from '@components/CustomTemplates/BrowseTemplates/constants';
 import { RunStatus } from '@interfaces/BlockRunType';
 import { SHARED_UTC_TOOLTIP_PROPS } from '@components/PipelineRun/shared/constants';
@@ -69,7 +68,8 @@ import {
   TAB_DASHBOARD,
   TAB_TODAY,
 } from '@components/Dashboard/constants';
-import { UNIT, UNITS_BETWEEN_SECTIONS } from '@oracle/styles/units/spacing';
+import { UNITS_BETWEEN_SECTIONS } from '@oracle/styles/units/spacing';
+import { VERTICAL_NAVIGATION_WIDTH } from '@components/Dashboard/index.style';
 import {
   capitalize,
   cleanName,
@@ -85,6 +85,7 @@ import { onSuccess } from '@api/utils/response';
 import { queryFromUrl } from '@utils/url';
 import { storeLocalTimezoneSetting } from '@components/settings/workspace/utils';
 import { useModal } from '@context/Modal';
+import UploadPipeline from '@components/PipelineDetail/UploadPipeline';
 
 const SHARED_WIDGET_SPACING_PROPS = {
   mt: 2,
@@ -289,6 +290,18 @@ function OverviewPage({
     uuid: 'browse_templates',
   });
 
+  const [showImportPipelineModal, hideImportPipelineModal] = useModal(() => (
+    <UploadPipeline
+      onCancel={hideImportPipelineModal}
+    />
+  ), {
+  }, [
+    ,
+  ], {
+    background: true,
+    uuid: 'import_pipeline',
+  });
+
   const [showConfigureProjectModal, hideConfigureProjectModal] = useModal(({
     cancelButtonText,
     header,
@@ -366,6 +379,7 @@ function OverviewPage({
   const newPipelineButtonMenuItems = useMemo(() => getNewPipelineButtonMenuItems(
     createPipeline,
     {
+      showImportPipelineModal,
       showAIModal: () => {
         if (!project?.openai_api_key) {
           showConfigureProjectModal({
@@ -385,6 +399,7 @@ function OverviewPage({
     showAIModal,
     showBrowseTemplates,
     showConfigureProjectModal,
+    showImportPipelineModal,
   ]);
 
   const addButtonEl = useMemo(() => (
@@ -625,7 +640,7 @@ def d(df):
             </Spacing>
             <ButtonTabs
               onClickTab={({ uuid }) => {
-                setSelectedTab(() => TIME_PERIOD_TABS.find(t => uuid === t.uuid))
+                setSelectedTab(() => allTabs.find(t => uuid === t.uuid));
               }}
               regularSizeText
               selectedTabUUID={timePeriod}
@@ -637,7 +652,7 @@ def d(df):
 
       {TAB_DASHBOARD.uuid === selectedTab?.uuid && (
         <BlockLayout
-          leftOffset={9 * UNIT}
+          leftOffset={VERTICAL_NAVIGATION_WIDTH - 1}
           pageBlockLayoutTemplate={pageBlockLayoutTemplate}
           topOffset={HEADER_HEIGHT + refSubheader?.current?.getBoundingClientRect()?.height}
           uuid="overview/dashboard"

@@ -38,6 +38,7 @@ import TagsContainer from '@components/Tags/TagsContainer';
 import Text from '@oracle/elements/Text';
 import ToggleSwitch from '@oracle/elements/Inputs/ToggleSwitch';
 import Toolbar from '@components/shared/Table/Toolbar';
+import UploadPipeline from '@components/PipelineDetail/UploadPipeline';
 import api from '@api';
 import dark from '@oracle/styles/themes/dark';
 import useProject from '@utils/models/project/useProject';
@@ -91,7 +92,7 @@ import {
   randomNameGenerator,
   removeUnderscore,
 } from '@utils/string';
-import { datetimeInLocalTimezone, utcStringToElapsedTime } from '@utils/date';
+import { dateFormatLong, datetimeInLocalTimezone, utcStringToElapsedTime } from '@utils/date';
 import { displayErrorFromReadResponse, onSuccess } from '@api/utils/response';
 import { filterQuery, queryFromUrl } from '@utils/url';
 import { get, set } from '@storage/localStorage';
@@ -155,6 +156,7 @@ function PipelineListPage() {
     clearTimeout(timeout.current);
 
     timeout.current = setTimeout(() => goToWithQuery({
+      [MetaQueryEnum.OFFSET]: 0,
       [PipelineQueryEnum.SEARCH]: searchQuery,
     }), 500);
   }, [
@@ -569,6 +571,19 @@ function PipelineListPage() {
     uuid: 'rename_pipeline_and_save',
   });
 
+  const [showImportPipelineModal, hideImportPipelineModal] = useModal(() => (
+    <UploadPipeline
+      fetchPipelines={fetchPipelines}
+      onCancel={hideImportPipelineModal}
+    />
+  ), {
+  }, [
+    fetchPipelines,
+  ], {
+    background: true,
+    uuid: 'upload_pipeline',
+  });
+
   const [showBrowseTemplates, hideBrowseTemplates] = useModal(() => (
     <ErrorProvider>
       <BrowseTemplates
@@ -672,6 +687,7 @@ function PipelineListPage() {
   const newPipelineButtonMenuItems = useMemo(() => getNewPipelineButtonMenuItems(
     createPipeline,
     {
+      showImportPipelineModal,
       showAIModal: () => {
         if (!project?.openai_api_key) {
           showConfigureProjectModal({
@@ -691,6 +707,7 @@ function PipelineListPage() {
     showAIModal,
     showBrowseTemplates,
     showConfigureProjectModal,
+    showImportPipelineModal,
   ]);
 
   const { data: dataTags } = api.tags.list();
@@ -851,7 +868,13 @@ function PipelineListPage() {
       ]}
       onClickFilterDefaults={() => {
         setFilters({});
-        router.push('/pipelines');
+        setSearchTextState('');
+        goToWithQuery({
+          [MetaQueryEnum.LIMIT]: query?.[MetaQueryEnum.LIMIT] || ROW_LIMIT,
+          [PipelineQueryEnum.SEARCH]: '',
+        }, {
+          replaceParams: true,
+        });
       }}
       onFilterApply={(query, updatedQuery) => {
         // @ts-ignore
@@ -878,7 +901,6 @@ function PipelineListPage() {
     isLoadingDelete,
     newPipelineButtonMenuItems,
     query,
-    router,
     searchText,
     selectedPipeline,
     setSearchText,
@@ -1019,6 +1041,7 @@ function PipelineListPage() {
       </Spacing>
 
       <Button
+        data-testid="help_mage_close_button"
         onClick={() => updateProject({
           help_improve_mage: true,
         }).then(() => hideHelpMageModal())}
@@ -1406,7 +1429,10 @@ function PipelineListPage() {
             title={updatedAt ? utcStringToElapsedTime(updatedAt) : null}
           >
             {updatedAt
-              ? datetimeInLocalTimezone(updatedAt, displayLocalTimezone)
+              ? datetimeInLocalTimezone(
+                dateFormatLong(updatedAt, { includeSeconds: true, utcFormat: true }),
+                displayLocalTimezone,
+              )
               : <>&#8212;</>}
           </Text>,
           <Text

@@ -355,6 +355,7 @@
             {
               "group": "Storage",
               "pages": [
+                "integrations/databases/Algolia",
                 "integrations/databases/BigQuery",
                 "integrations/databases/ClickHouse",
                 "integrations/databases/Chroma",
@@ -363,6 +364,7 @@
                 "integrations/databases/GoogleSheets",
                 "integrations/databases/MicrosoftSQLServer",
                 "integrations/databases/MongoDB",
+                "integrations/databases/MotherDuck",
                 "integrations/databases/MySQL",
                 "integrations/databases/Pinot",
                 "integrations/databases/PostgreSQL",
@@ -370,7 +372,8 @@
                 "integrations/databases/Redshift",
                 "integrations/databases/S3",
                 "integrations/databases/Snowflake",
-                "integrations/databases/trino"
+                "integrations/databases/trino",
+                "integrations/databases/weaviate"
               ]
             },
             "getting-started/kernels"
@@ -430,7 +433,8 @@
                     "integrations/observability/metaplane",
                     "integrations/observability/newrelic",
                     "integrations/observability/sentry",
-                    "integrations/observability/prometheus"
+                    "integrations/observability/prometheus",
+                    "integrations/observability/opentelemetry"
                   ]
                 },
                 {
@@ -439,7 +443,9 @@
                     "integrations/observability/alerting-email",
                     "integrations/observability/alerting-opsgenie",
                     "integrations/observability/alerting-slack",
-                    "integrations/observability/alerting-teams"
+                    "integrations/observability/alerting-teams",
+                    "integrations/observability/alerting-discord",
+                    "integrations/observability/alerting-telegram"
                   ]
                 }
               ]
@@ -525,6 +531,7 @@
             "guides/blocks/markdown-blocks",
             "guides/blocks/r-blocks",
             "guides/blocks/replicate-blocks",
+            "guides/blocks/reorder-blocks",
             "guides/blocks/detach-blocks"
           ]
         },
@@ -535,7 +542,8 @@
             "guides/streaming-pipeline",
             "guides/streaming/magic-devcontainer",
             "guides/streaming-pipeline-rabbitmq",
-            "guides/train-model"
+            "guides/train-model",
+            "guides/pipelines/importing-pipelines"
           ]
         },
         "guides/dbt/developing-dbt-in-mage",
@@ -773,6 +781,12 @@
                 "production/developing-in-the-cloud/workspaces/kubernetes"
               ]
             }
+          ]
+        },
+        {
+          "group": "Custom docker image",
+          "pages": [
+            "production/custom-docker-image/non-root-user"
           ]
         }
       ]
@@ -1017,6 +1031,14 @@
     {
       "source": "/production/observability/alerting-teams",
       "destination": "/integrations/observability/alerting-teams"
+    },
+    {
+      "source": "/production/observability/alerting-discord",
+      "destination": "/integrations/observability/alerting-discord"
+    },
+    {
+      "source": "/production/observability/alerting-telegram",
+      "destination": "/integrations/observability/alerting-telegram"
     },
     {
       "source": "/production/observability/datadog",

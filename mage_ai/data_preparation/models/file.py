@@ -16,6 +16,7 @@ from mage_ai.data_preparation.models.project.constants import FeatureUUID
 from mage_ai.settings.platform import project_platform_activated
 from mage_ai.settings.repo import get_repo_path
 from mage_ai.shared.environments import is_debug
+from mage_ai.shared.path_fixer import remove_base_repo_path_or_name
 from mage_ai.shared.utils import get_absolute_path
 
 FILE_VERSIONS_DIR = '.file_versions'
@@ -138,6 +139,7 @@ class File:
         exclude_pattern: str = None,
         pattern: str = None,
         check_file_path: bool = False,
+        include_pipeline_count: bool = False,
     ):
         dir_selector = None
         file_selector = None
@@ -164,12 +166,19 @@ class File:
 
             dir_selector = __select
 
+        pipeline_count_mapping = None
+        if include_pipeline_count:
+            from mage_ai.cache.block import BlockCache
+            pipeline_count_mapping = BlockCache().get_pipeline_count_mapping()
+
         return traverse(
             os.path.basename(repo_path),
             True,
             repo_path,
             dir_selector=dir_selector,
             file_selector=file_selector,
+            include_pipeline_count=include_pipeline_count,
+            pipeline_count_mapping=pipeline_count_mapping,
         )
 
     @classmethod
@@ -417,6 +426,7 @@ class File:
         update_file_cache()
 
     def to_dict(self, include_content: bool = False, include_metadata: bool = False):
+        file_exists = self.exists()
         data = dict(
             name=self.filename,
             path=os.path.join(self.dir_path, self.filename),
@@ -427,21 +437,23 @@ class File:
         if include_content:
             data['content'] = self.content()
 
-        if include_metadata:
+        if include_metadata and file_exists:
             data['size'] = self.size
             data['modified_timestamp'] = self.modified_timestamp
 
         return data
 
     async def to_dict_async(self, include_content=False):
+        file_exists = self.exists()
         data = dict(
             name=self.filename,
             path=os.path.join(self.dir_path, self.filename),
-            size=self.size,
-            modified_timestamp=self.modified_timestamp,
+            size=self.size if file_exists else None,
+            modified_timestamp=self.modified_timestamp if file_exists else None,
         )
         if include_content:
             data['content'] = await self.content_async()
+
         return data
 
 
@@ -464,10 +476,19 @@ def traverse(
     depth=1,
     dir_selector: Callable = None,
     file_selector: Callable = None,
+    include_pipeline_count: bool = False,
+    pipeline_count_mapping: Dict = None,
 ) -> Dict:
     tree_entry = dict(name=name)
     if not is_dir:
         tree_entry['disabled'] = disabled
+        if include_pipeline_count:
+            pipeline_count_mapping = pipeline_count_mapping or {}
+            cache_key = remove_base_repo_path_or_name(path)
+            pipeline_count = pipeline_count_mapping.get(cache_key)
+            if pipeline_count is not None:
+                tree_entry['pipeline_count'] = pipeline_count
+
         return tree_entry
     if depth >= MAX_DEPTH:
         return tree_entry
@@ -510,6 +531,8 @@ def traverse(
             depth + 1,
             dir_selector=dir_selector,
             file_selector=file_selector,
+            include_pipeline_count=include_pipeline_count,
+            pipeline_count_mapping=pipeline_count_mapping,
         ) for entry in sorted(
             filter(__filter, os.scandir(path)),
             key=lambda entry: entry.name,

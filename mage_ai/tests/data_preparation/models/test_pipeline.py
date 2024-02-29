@@ -129,7 +129,6 @@ class PipelineTest(AsyncDBTestCase):
             conditionals=[],
             settings=dict(triggers=None),
             created_at='2023-08-01 08:08:24+00:00',
-            updated_at=None,
             widgets=[
                 dict(
                     language='python',
@@ -278,7 +277,6 @@ class PipelineTest(AsyncDBTestCase):
             conditionals=[],
             settings=dict(triggers=None),
             created_at='2023-08-01 08:08:24+00:00',
-            updated_at=None,
             widgets=[],
         ))
 
@@ -389,7 +387,6 @@ class PipelineTest(AsyncDBTestCase):
             conditionals=[],
             settings=dict(triggers=None),
             created_at='2023-08-01 08:08:24+00:00',
-            updated_at=None,
             widgets=[],
         ))
 
@@ -557,7 +554,6 @@ class PipelineTest(AsyncDBTestCase):
             conditionals=[],
             settings=dict(triggers=None),
             created_at='2023-08-01 08:08:24+00:00',
-            updated_at=None,
             widgets=[],
         ))
 
@@ -586,9 +582,9 @@ class PipelineTest(AsyncDBTestCase):
         self.assertFalse(os.access(block4.file_path, os.F_OK))
         self.assertFalse(os.access(block5.file_path, os.F_OK))
 
-    def test_duplicate_standard_pipeline(self):
+    async def test_duplicate_standard_pipeline(self):
         pipeline = self.__create_pipeline_with_blocks('test_pipeline_7a')
-        duplicate_pipeline = Pipeline.duplicate(pipeline, 'duplicate_pipeline')
+        duplicate_pipeline = await Pipeline.duplicate(pipeline, 'duplicate_pipeline')
         for block_uuid in pipeline.blocks_by_uuid:
             original = pipeline.blocks_by_uuid[block_uuid]
             duplicate = duplicate_pipeline.blocks_by_uuid[block_uuid]
@@ -609,9 +605,9 @@ class PipelineTest(AsyncDBTestCase):
             )
             self.assertEqual(original.upstream_block_uuids, duplicate.upstream_block_uuids)
 
-    def test_duplicate_integration_pipeline(self):
+    async def test_duplicate_integration_pipeline(self):
         pipeline = self.__create_pipeline_with_integration('test_pipeline_7b')
-        duplicate_pipeline = Pipeline.duplicate(pipeline, 'duplicate_pipeline_2')
+        duplicate_pipeline = await Pipeline.duplicate(pipeline, 'duplicate_pipeline_2')
         for block_uuid in pipeline.blocks_by_uuid:
             original = pipeline.blocks_by_uuid[block_uuid]
             duplicate = duplicate_pipeline.blocks_by_uuid[block_uuid]
@@ -684,7 +680,6 @@ class PipelineTest(AsyncDBTestCase):
                     run_pipeline_in_one_process=False,
                     spark_config={},
                     type='integration',
-                    updated_at=None,
                     uuid='test_pipeline_9',
                     remote_variables_dir=None,
                     variables_dir=self.repo_path,

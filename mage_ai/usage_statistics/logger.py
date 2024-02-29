@@ -3,11 +3,12 @@ import json
 import platform
 import socket
 from datetime import datetime
-from typing import Callable, Dict, Union
+from typing import Callable, Dict, List, Union
 
 import aiohttp
 import pytz
 
+from mage_ai.api.operations.constants import OperationType
 from mage_ai.cache.block_action_object.constants import (
     OBJECT_TYPE_BLOCK_FILE,
     OBJECT_TYPE_CUSTOM_BLOCK_TEMPLATE,
@@ -154,6 +155,49 @@ class UsageStatisticLogger():
             ),
             override_validation=True,
             project_uuid=project_uuid,
+        )
+
+    async def error(
+        self,
+        event_name: EventNameType,
+        code: int = None,
+        errors: List[str] = None,
+        message: str = None,
+        type: str = None,
+        operation: OperationType = None,
+        resource: str = None,
+        resource_id: str = None,
+        resource_parent: str = None,
+        resource_parent_id: str = None,
+    ) -> bool:
+        resource_id_hashed = None
+        if resource_id is not None:
+            resource_id_hashed = hash(str(resource_id))
+
+        resource_parent_id_hashed = None
+        if resource_parent_id is not None:
+            resource_parent_id_hashed = hash(str(resource_parent_id))
+
+        if message and str(resource_id) in message:
+            message = message.replace(str(resource_id), str(resource_id_hashed))
+        if message and str(resource_parent_id) in message:
+            message = message.replace(str(resource_parent_id), str(resource_parent_id_hashed))
+
+        return await self.__send_message(
+            data=dict(
+                object=EventObjectType.ERROR,
+                action=EventActionType.IMPRESSION,
+                operation=operation,
+                resource=resource,
+                resource_id=resource_id_hashed,
+                resource_parent=resource_parent,
+                resource_parent_id=resource_parent_id_hashed,
+                code=code,
+                errors=errors,
+                message=message,
+                type=type,
+            ),
+            event_name=event_name,
         )
 
     async def project_impression(self) -> bool:
@@ -421,8 +465,14 @@ class UsageStatisticLogger():
     def __shared_metadata(self) -> Dict:
         return dict(
             environment=get_env(),
-            hostname=socket.gethostbyname(socket.gethostname()),
+            hostname=self.__get_host(),
             platform=platform.platform(),
             project_uuid=self.project.project_uuid,
             version=self.project.version,
         )
+
+    def __get_host(self):
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return 'unknown'

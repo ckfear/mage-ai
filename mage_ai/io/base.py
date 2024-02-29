@@ -1,5 +1,4 @@
 import os
-import re
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import IO, Any, Callable, Dict, Union
@@ -9,11 +8,13 @@ from pandas import DataFrame
 
 from mage_ai.io.constants import SQL_RESERVED_WORDS
 from mage_ai.shared.logger import VerbosePrintHandler
+from mage_ai.shared.utils import clean_name
 
 QUERY_ROW_LIMIT = 10_000_000
 
 
 class DataSource(str, Enum):
+    ALGOLIA = 'algolia'
     API = 'api'
     BIGQUERY = 'bigquery'
     CHROMA = 'chroma'
@@ -35,6 +36,7 @@ class DataSource(str, Enum):
     SNOWFLAKE = 'snowflake'
     SPARK = 'spark'
     TRINO = 'trino'
+    WEAVIATE = 'weaviate'
 
 
 class FileFormat(str, Enum):
@@ -207,12 +209,18 @@ class BaseFile(BaseIO):
             format (Union[FileFormat, str]): Format to write the data frame as.
             output (Union[IO, os.PathLike]): Output stream/filepath to write data frame to.
         """
+        if format is None:
+            format = FileFormat.PARQUET
         writer = self.__get_writer(df, format)
         if format == FileFormat.HDF5:
             if isinstance(output, IO):
                 raise ValueError('Cannot write HDF5 file to buffer of any type.')
             name = os.path.splitext(os.path.basename(output))[0]
             kwargs.setdefault('key', name)
+        elif format == FileFormat.PARQUET:
+            if 'coerce_timestamps' not in kwargs:
+                kwargs['coerce_timestamps'] = 'ms'
+                kwargs['allow_truncated_timestamps'] = True
         writer(output, **kwargs)
 
     def __get_writer(
@@ -290,8 +298,13 @@ class BaseSQLDatabase(BaseIO):
         """
         return query_string.strip(' \n\t')
 
-    def _clean_column_name(self, column_name: str, allow_reserved_words: bool = False) -> str:
-        col_new = re.sub(r'\W', '_', column_name.lower())
+    def _clean_column_name(
+        self,
+        column_name: str,
+        allow_reserved_words: bool = False,
+        case_sensitive: bool = False,
+    ) -> str:
+        col_new = clean_name(column_name, case_sensitive=case_sensitive)
         if not allow_reserved_words and col_new.upper() in SQL_RESERVED_WORDS:
             col_new = f'_{col_new}'
         return col_new

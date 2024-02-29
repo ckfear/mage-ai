@@ -48,7 +48,6 @@ from mage_ai.data_preparation.models.block.dynamic.variables import (
     get_outputs_for_dynamic_block,
     get_outputs_for_dynamic_block_async,
     get_outputs_for_dynamic_child,
-    get_outputs_for_dynamic_child_async,
 )
 from mage_ai.data_preparation.models.block.errors import HasDownstreamDependencies
 from mage_ai.data_preparation.models.block.extension.utils import handle_run_tests
@@ -568,6 +567,9 @@ class Block(DataIntegrationMixin, SparkBlock, ProjectPlatformAccessible):
                         print(f'[ERROR] Block.metadata_async: {err}')
 
         return {}
+
+    def exists(self) -> bool:
+        return self.file.exists()
 
     @property
     def executable(self) -> bool:
@@ -1131,7 +1133,7 @@ class Block(DataIntegrationMixin, SparkBlock, ProjectPlatformAccessible):
                     'on_failure',
                     callback_kwargs=dict(__error=error),
                     from_notebook=from_notebook,
-                    global_vars=global_vars,
+                    global_vars=merge_dict(global_vars, self.global_vars or {}),
                     logger=logger,
                     logging_tags=logging_tags,
                     parent_block=self,
@@ -1141,7 +1143,7 @@ class Block(DataIntegrationMixin, SparkBlock, ProjectPlatformAccessible):
         for callback_block in callback_arr:
             callback_block.execute_callback(
                 'on_success',
-                global_vars=global_vars,
+                global_vars=merge_dict(global_vars, self.global_vars or {}),
                 logger=logger,
                 logging_tags=logging_tags,
                 parent_block=self,
@@ -1196,7 +1198,10 @@ class Block(DataIntegrationMixin, SparkBlock, ProjectPlatformAccessible):
                         f'Please run upstream blocks {upstream_block_uuids} '
                         'before running the current block.'
                     )
-            global_vars = self.__enrich_global_vars(global_vars)
+            global_vars = self.__enrich_global_vars(
+                global_vars,
+                dynamic_block_index=dynamic_block_index,
+            )
 
             if output_messages_to_logs and not logger:
                 from mage_ai.data_preparation.models.block.constants import (
@@ -1761,9 +1766,6 @@ class Block(DataIntegrationMixin, SparkBlock, ProjectPlatformAccessible):
 
         return block_function
 
-    def exists(self) -> bool:
-        return os.path.exists(self.file_path)
-
     def fetch_input_variables(
         self,
         input_args,
@@ -2005,19 +2007,15 @@ class Block(DataIntegrationMixin, SparkBlock, ProjectPlatformAccessible):
             pairs = []
 
             if is_dynamic_child:
-                tuples = get_outputs_for_dynamic_child(
+                lazy_variable_controller = get_outputs_for_dynamic_child(
                     self,
                     execution_partition=execution_partition,
                     sample=sample,
                     sample_count=sample_count,
                 )
-                for tup in tuples:
-                    if not is_dynamic:
-                        tup = (list(tup),)
-                    pairs.append(tup)
-
-                if dynamic_block_index is not None:
-                    pairs = [pairs[dynamic_block_index]]
+                pairs = lazy_variable_controller.render(
+                    dynamic_block_index=dynamic_block_index,
+                )
             elif is_dynamic:
                 tup = get_outputs_for_dynamic_block(
                     self,
@@ -2052,11 +2050,11 @@ class Block(DataIntegrationMixin, SparkBlock, ProjectPlatformAccessible):
 
                     outputs_below_limit = not sample or not sample_count
                     if is_data_product:
-                        outputs_below_limit = \
-                            outputs_below_limit and len(data_products) < sample_count
+                        outputs_below_limit = outputs_below_limit or \
+                            (sample_count is not None and len(data_products) < sample_count)
                     else:
-                        outputs_below_limit = \
-                            outputs_below_limit and len(outputs) < sample_count
+                        outputs_below_limit = outputs_below_limit or \
+                            (sample_count is not None and len(outputs) < sample_count)
 
                     if outputs_below_limit:
                         if is_data_product:
@@ -2129,6 +2127,7 @@ class Block(DataIntegrationMixin, SparkBlock, ProjectPlatformAccessible):
         csv_lines_only: bool = False,
         execution_partition: str = None,
         include_print_outputs: bool = True,
+        sample: bool = True,
         sample_count: int = DATAFRAME_SAMPLE_COUNT_PREVIEW,
         variable_type: VariableType = None,
         block_uuid: str = None,
@@ -2144,22 +2143,20 @@ class Block(DataIntegrationMixin, SparkBlock, ProjectPlatformAccessible):
             pairs = []
 
             if is_dynamic_child:
-                tuples = await get_outputs_for_dynamic_child_async(
+                lazy_variable_controller = get_outputs_for_dynamic_child(
                     self,
                     execution_partition=execution_partition,
+                    sample=sample,
                     sample_count=sample_count,
                 )
-
-                for tup in tuples:
-                    if not is_dynamic:
-                        tup = (list(tup),)
-                    pairs.append(tup)
-                if dynamic_block_index is not None:
-                    pairs = [pairs[dynamic_block_index]]
+                pairs = await lazy_variable_controller.render_async(
+                    dynamic_block_index=dynamic_block_index,
+                )
             elif is_dynamic:
                 tup = await get_outputs_for_dynamic_block_async(
                     self,
                     execution_partition=execution_partition,
+                    sample=sample,
                     sample_count=sample_count,
                 )
                 pairs.append(tup)
@@ -2305,7 +2302,7 @@ class Block(DataIntegrationMixin, SparkBlock, ProjectPlatformAccessible):
                     sample_data=dict(
                         columns=columns_to_display,
                         rows=json.loads(
-                            data[columns_to_display].to_json(orient='split')
+                            data[columns_to_display].to_json(orient='split', date_format='iso'),
                         )['data']
                     ),
                     shape=[row_count, column_count],
@@ -2381,7 +2378,9 @@ df = get_variable('{self.pipeline.uuid}', '{self.uuid}', 'df')
             data = dict(
                 sample_data=dict(
                     columns=columns_to_display,
-                    rows=json.loads(df[columns_to_display].to_json(orient='split'))['data']
+                    rows=json.loads(
+                        df[columns_to_display].to_json(orient='split', date_format='iso'),
+                    )['data']
                 ),
                 type=DataType.TABLE,
                 variable_uuid=variable_uuid,
@@ -2445,7 +2444,12 @@ df = get_variable('{self.pipeline.uuid}', '{self.uuid}', 'df')
 
     def get_pipelines_from_cache(self) -> List[Dict]:
         arr = BlockCache().get_pipelines(self)
-        return unique_by(arr, lambda x: (x.get('pipeline') or {}).get('uuid'))
+
+        return unique_by(
+            arr,
+            lambda x: (f"{(x.get('pipeline') or {}).get('uuid')}_"
+                       f"{(x.get('pipeline') or {}).get('repo_path')}"),
+        )
 
     def to_dict_base(
         self,
@@ -2794,6 +2798,9 @@ df = get_variable('{self.pipeline.uuid}', '{self.uuid}', 'df')
         if logging_tags is None:
             logging_tags = dict()
 
+        if dynamic_block_index is not None:
+            global_vars['dynamic_block_index'] = dynamic_block_index
+
         self.dynamic_block_uuid = dynamic_block_uuid
 
         if self.pipeline \
@@ -3027,7 +3034,11 @@ df = get_variable('{self.pipeline.uuid}', '{self.uuid}', 'df')
         variable_mapping = merge_dict(output_variables, consolidated_print_variables)
         return variable_mapping
 
-    def __enrich_global_vars(self, global_vars: Dict = None) -> Dict:
+    def __enrich_global_vars(
+        self,
+        global_vars: Dict = None,
+        dynamic_block_index: int = None,
+    ) -> Dict:
         """
         Enriches the provided global variables dictionary with additional context, Spark session,
         environment, configuration, and an empty context dictionary.
@@ -3070,6 +3081,9 @@ df = get_variable('{self.pipeline.uuid}', '{self.uuid}', 'df')
         # Add pipeline uuid and block uuid to global_vars
         global_vars['pipeline_uuid'] = self.pipeline.uuid if self.pipeline else None
         global_vars['block_uuid'] = self.uuid
+
+        if dynamic_block_index is not None:
+            global_vars['dynamic_block_index'] = dynamic_block_index
 
         self.global_vars = global_vars
 
@@ -3415,7 +3429,6 @@ df = get_variable('{self.pipeline.uuid}', '{self.uuid}', 'df')
         old_file_path = self.file_path
         block_content = self.content
 
-        # load_titanic
         new_uuid = clean_name(name)
         self.name = name
         self.uuid = new_uuid
@@ -3625,6 +3638,7 @@ class AddonBlock(Block):
         self,
         global_vars: Dict,
         parent_block: Block,
+        dynamic_block_index: int = None,
         **kwargs,
     ) -> Dict:
         pipeline_run = kwargs.get('pipeline_run')
@@ -3636,6 +3650,10 @@ class AddonBlock(Block):
                 pipeline_run=pipeline_run,
             ),
         )
+
+        if dynamic_block_index is not None:
+            global_vars['dynamic_block_index'] = dynamic_block_index
+
         if parent_block:
             global_vars['parent_block_uuid'] = parent_block.uuid
 
@@ -3677,6 +3695,7 @@ class ConditionalBlock(AddonBlock):
             global_vars = self._create_global_vars(
                 global_vars,
                 parent_block,
+                dynamic_block_index=dynamic_block_index,
                 **kwargs,
             )
 
@@ -3745,6 +3764,7 @@ class CallbackBlock(AddonBlock):
             global_vars = self._create_global_vars(
                 global_vars,
                 parent_block,
+                dynamic_block_index=dynamic_block_index,
                 **kwargs
             )
 

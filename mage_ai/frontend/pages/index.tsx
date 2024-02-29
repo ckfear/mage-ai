@@ -2,6 +2,8 @@ import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 
 import api from '@api';
+import { isDemo } from '@utils/environment';
+import { logUserOS } from '@utils/gtag';
 
 const Home = () => {
   const router = useRouter();
@@ -18,7 +20,15 @@ const Home = () => {
   const homepageRedirectPath = pipelineRunCount === 0 ? '/pipelines' : '/overview';
 
   useEffect(() => {
-    if (dataStatus) {
+    if (isDemo()) {
+      logUserOS();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (dataPipelineRuns?.error?.code === 403) {
+      router.replace('/sign-in');
+    } else if (dataStatus) {
       const manage = dataStatus?.is_instance_manager;
       let pathname = completePath;
       if (basePath === '/') {

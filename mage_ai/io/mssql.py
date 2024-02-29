@@ -1,3 +1,5 @@
+import struct
+from datetime import datetime, timedelta, timezone
 from typing import IO, Any, List, Union
 
 import numpy as np
@@ -5,6 +7,7 @@ import pyodbc
 import simplejson
 from pandas import DataFrame, Series
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 
 from mage_ai.io.base import QUERY_ROW_LIMIT, ExportWritePolicy
 from mage_ai.io.config import BaseConfigLoader, ConfigKey
@@ -61,6 +64,17 @@ class MSSQL(BaseSQL):
             self._ctx = pyodbc.connect(
                 self.connection_string,
             )
+
+            # https://github.com/mkleehammer/pyodbc/wiki/Using-an-Output-Converter-function
+
+            def handle_datetimeoffset(dto_value):
+                # ref: https://github.com/mkleehammer/pyodbc/issues/134#issuecomment-281739794
+                # now struct.unpack: e.g., (2017, 3, 16, 10, 35, 18, 500000000, -6, 0)
+                tup = struct.unpack("<6hI2h", dto_value)
+                return datetime(tup[0], tup[1], tup[2], tup[3], tup[4], tup[5], tup[6] // 1000,
+                                timezone(timedelta(hours=tup[7], minutes=tup[8])))
+
+            self._ctx.add_output_converter(-155, handle_datetimeoffset)
 
     def build_create_schema_command(
         self,
@@ -148,8 +162,20 @@ class MSSQL(BaseSQL):
         if_exists: ExportWritePolicy = ExportWritePolicy.REPLACE,
 
     ):
+        connection_url = URL.create(
+            'mssql+pyodbc',
+            username=self.settings['user'],
+            password=self.settings['password'],
+            host=self.settings['server'],
+            database=self.settings['database'],
+            query=dict(
+                driver=self.settings['driver'],
+                ENCRYPT='yes',
+                TrustServerCertificate='yes',
+            ),
+        )
         engine = create_engine(
-            f'mssql+pyodbc://?odbc_connect={self.connection_string}',
+            connection_url,
             fast_executemany=True,
         )
         df.to_sql(table_name, engine, schema=schema_name, if_exists=if_exists, index=False)

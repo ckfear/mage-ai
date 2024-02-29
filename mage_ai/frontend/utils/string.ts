@@ -170,6 +170,10 @@ export function capitalizeRemoveUnderscoreLower(word = '') {
   return capitalize(removeUnderscore(word.toLowerCase()));
 }
 
+export function lowercaseRemoveUnderscore(word = '') {
+  return removeUnderscore(word.toLowerCase());
+}
+
 export function abbreviateNumber(value) {
   let newValue = value;
   if (value >= 1000) {
@@ -336,7 +340,7 @@ export function formatNumberToDuration(duration: number): string {
     }
   }
 
-  return displayText
+  return displayText;
 }
 
 export function alphabet(): string[] {
@@ -362,7 +366,7 @@ export function removeANSI(text: string): string {
 export function stringSimilarity(str1: string, str2: string, gramSize: number = 2) {
   function getNGrams(s: string, len: number) {
     s = ' '.repeat(len - 1) + s.toLowerCase() + ' '.repeat(len - 1);
-    let v = new Array(s.length - len + 1);
+    const v = new Array(s.length - len + 1);
     for (let i = 0; i < v.length; i++) {
       v[i] = s.slice(i, i + len);
     }
@@ -371,16 +375,16 @@ export function stringSimilarity(str1: string, str2: string, gramSize: number = 
 
   if (!str1?.length || !str2?.length) { return 0.0; }
 
-  let s1 = str1.length < str2.length ? str1 : str2;
-  let s2 = str1.length < str2.length ? str2 : str1;
+  const s1 = str1.length < str2.length ? str1 : str2;
+  const s2 = str1.length < str2.length ? str2 : str1;
 
-  let pairs1 = getNGrams(s1, gramSize);
-  let pairs2 = getNGrams(s2, gramSize);
-  let set = new Set<string>(pairs1);
+  const pairs1 = getNGrams(s1, gramSize);
+  const pairs2 = getNGrams(s2, gramSize);
+  const set = new Set<string>(pairs1);
 
-  let total = pairs2.length;
+  const total = pairs2.length;
   let hits = 0;
-  for (let item of pairs2) {
+  for (const item of pairs2) {
     if (set.delete(item)) {
       hits++;
     }
@@ -415,6 +419,6 @@ export function hexToRgb(hex) {
   return result ? {
     r: parseInt(result[1], 16),
     g: parseInt(result[2], 16),
-    b: parseInt(result[3], 16)
+    b: parseInt(result[3], 16),
   } : null;
 }

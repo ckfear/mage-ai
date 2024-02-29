@@ -8,6 +8,7 @@ import App, { AppProps } from 'next/app';
 import Cookies from 'js-cookie';
 import LoadingBar from 'react-top-loading-bar';
 import dynamic from 'next/dynamic';
+import { GoogleAnalytics } from '@next/third-parties/google';
 import { GridThemeProvider } from 'styled-bootstrap-grid';
 import { ThemeProvider } from 'styled-components';
 import { createRoot } from 'react-dom/client';
@@ -22,7 +23,9 @@ import ToastWrapper from '@components/Toast/ToastWrapper';
 import api from '@api';
 import useGlobalKeyboardShortcuts from '@utils/hooks/keyboardShortcuts/useGlobalKeyboardShortcuts';
 import useProject from '@utils/models/project/useProject';
+import useStatus from '@utils/models/status/useStatus';
 import { CustomEventUUID } from '@utils/events/constants';
+import { DEMO_GA_MEASUREMENT_ID } from '@utils/gtag';
 import { ErrorProvider } from '@context/Error';
 import { LOCAL_STORAGE_KEY_HIDE_PUBLIC_DEMO_WARNING } from '@storage/constants';
 import { ModalProvider } from '@context/Modal';
@@ -43,8 +46,8 @@ import {
   gridTheme as gridThemeDefault,
   theme as stylesTheme,
 } from '@styles/theme';
+import { isDemo } from '@utils/environment';
 import { queryFromUrl, queryString, redirectToUrl } from '@utils/url';
-import { COMMON_EXCLUDE_PATTERNS } from '@interfaces/FileType';
 
 const COMMAND_CENTER_ROOT_ID = 'command-center-root';
 
@@ -92,6 +95,9 @@ function MyApp(props: MyAppProps & AppProps) {
     featureEnabled,
     featureUUIDs,
   ]);
+
+  const windowIsDefined = typeof window !== 'undefined';
+  const isDemoApp = useMemo(() => isDemo(), []);
 
   const savePageHistory = useCallback(() => {
     if (commandCenterEnabled) {
@@ -205,12 +211,6 @@ function MyApp(props: MyAppProps & AppProps) {
     unregisterOnKeyUp,
   ]);
 
-  const windowIsDefined = typeof window !== 'undefined';
-  const isDemoApp = useMemo(() =>
-    windowIsDefined && window.location.hostname === 'demo.mage.ai',
-    [windowIsDefined],
-  );
-
   const val = Cookies.get(
     REQUIRE_USER_AUTHENTICATION_COOKIE_KEY,
     REQUIRE_USER_AUTHENTICATION_COOKIE_PROPERTIES,
@@ -225,12 +225,15 @@ function MyApp(props: MyAppProps & AppProps) {
     || valPermissions === null
     || !REQUIRE_USER_PERMISSIONS();
 
-  const { data } = api.statuses.list({}, {}, { pauseFetch: !noValue && !noValuePermissions });
+  const { status } = useStatus({
+    delay: 3000,
+    pauseFetch: !noValue && !noValuePermissions,
+  });
 
   const requireUserAuthentication =
-    useMemo(() => data?.statuses?.[0]?.require_user_authentication, [data]);
+    useMemo(() => status?.require_user_authentication, [status]);
   const requireUserPermissions =
-    useMemo(() => data?.statuses?.[0]?.require_user_permissions, [data]);
+    useMemo(() => status?.require_user_permissions, [status]);
 
   const { data: dataProjects } = api.projects.list({}, { revalidateOnFocus: false });
 
@@ -285,54 +288,60 @@ function MyApp(props: MyAppProps & AppProps) {
     ]);
 
   return (
-    <KeyboardContext.Provider value={keyboardContextValue}>
-      <ThemeProvider
-        theme={Object.assign(
-          stylesTheme,
-          themeProps?.currentTheme || currentTheme,
-        )}
-      >
-        <GridThemeProvider gridTheme={gridThemeDefault}>
-          <ModalProvider>
-            <SheetProvider>
-              <ErrorProvider>
-                <Head
-                  defaultTitle={defaultTitle}
-                  title={title}
-                >
-                  <meta
-                    content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=0"
-                    name="viewport"
-                  />
-                </Head>
+    <>
+      <KeyboardContext.Provider value={keyboardContextValue}>
+        <ThemeProvider
+          theme={Object.assign(
+            stylesTheme,
+            themeProps?.currentTheme || currentTheme,
+          )}
+        >
+          <GridThemeProvider gridTheme={gridThemeDefault}>
+            <ModalProvider>
+              <SheetProvider>
+                <ErrorProvider>
+                  <Head
+                    defaultTitle={defaultTitle}
+                    title={title}
+                  >
+                    <meta
+                      content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=0"
+                      name="viewport"
+                    />
+                  </Head>
 
-                <LoadingBar color={RED} ref={refLoadingBar} />
+                  <LoadingBar color={RED} ref={refLoadingBar} />
 
-                {/* @ts-ignore */}
-                <Component {...pageProps} />
+                  {/* @ts-ignore */}
+                  <Component {...pageProps} />
 
-                {isDemoApp && (
-                  <Banner
-                    linkProps={{
-                      href: 'https://github.com/mage-ai/mage-ai',
-                      label: 'GET MAGE',
-                    }}
-                    localStorageHideKey={LOCAL_STORAGE_KEY_HIDE_PUBLIC_DEMO_WARNING}
-                    textProps={{
-                      message: 'Public demo. Do not add private credentials.',
-                      warning: true,
-                    }}
-                  />
-                )}
-                {shouldShowCommandCenter && <CommandCenter />}
-                {!shouldShowCommandCenter && <div id={COMMAND_CENTER_ROOT_ID} />}
-              </ErrorProvider>
-            </SheetProvider>
-          </ModalProvider>
-        </GridThemeProvider>
-        <ToastWrapper />
-      </ThemeProvider>
-    </KeyboardContext.Provider>
+                  {isDemoApp && (
+                    <Banner
+                      linkProps={{
+                        href: 'https://github.com/mage-ai/mage-ai',
+                        label: 'GET MAGE',
+                      }}
+                      localStorageHideKey={LOCAL_STORAGE_KEY_HIDE_PUBLIC_DEMO_WARNING}
+                      textProps={{
+                        message: 'Public demo. Do not add private credentials.',
+                        warning: true,
+                      }}
+                    />
+                  )}
+                  {shouldShowCommandCenter && <CommandCenter />}
+                  {!shouldShowCommandCenter && <div id={COMMAND_CENTER_ROOT_ID} />}
+                </ErrorProvider>
+              </SheetProvider>
+            </ModalProvider>
+          </GridThemeProvider>
+          <ToastWrapper />
+        </ThemeProvider>
+      </KeyboardContext.Provider>
+
+      {isDemoApp && (
+        <GoogleAnalytics gaId={DEMO_GA_MEASUREMENT_ID} />
+      )}
+    </>
   );
 }
 
